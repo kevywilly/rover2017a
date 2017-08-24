@@ -1,9 +1,9 @@
-#include "motors.h"
-#include "motion.h"
-#include "distance_sensor.h"
-#include "sound.h"
-#include "ir_sensor.h"
-#include <Servo.h>
+
+
+
+#include "IRSensor.h"
+#include "Motors.h"
+#include "SonarSensor.h"
 
 #define DEBUG
 
@@ -20,9 +20,9 @@
 #define IR_MAX_V 600
 #define IR_MIN_CM 4
 #define IR_MAX_CM 30
-#define IR_TOO_CLOSE 25
-#define IR_IN_RANGE 25
-#define IR_PING_INTERVAL 20
+#define IR_THRESHOLD 25
+#define IR_RANGE 25
+#define IR_PING_INTERVAL 15
 
 #define SERVO_LEFT_PIN 11
 #define SERVO_RIGHT_PIN 12
@@ -30,19 +30,20 @@
 #define SERVO_RIGHT_CENTER_MICROS 1545
 #define MOTOR_MAX_POWER_OFFSET 220
 
-#define SONAR_TOO_CLOSE 25
-#define SONAR_IN_RANGE 50
-#define SONAR_PING_INTERVAL 40
+#define SONAR_SERVO_PIN 7
+#define SONAR_THRESHOLD 25
+#define SONAR_RANGE 50
+#define SONAR_PING_INTERVAL 20
 
 #define CALIBRATION_MODE 0
 #define AUTONOMOUS_MODE 1
 
-IRSensor ir_left(IR_LEFT_PIN, IR_MIN_V, IR_MAX_V, IR_MIN_CM, IR_MAX_CM, IR_TOO_CLOSE, IR_IN_RANGE);
-IRSensor ir_right(IR_RIGHT_PIN, IR_MIN_V, IR_MAX_V, IR_MIN_CM, IR_MAX_CM, IR_TOO_CLOSE, IR_IN_RANGE);
-IRSensor ir_rear(IR_REAR_PIN, IR_MIN_V, IR_MAX_V, IR_MIN_CM, IR_MAX_CM, SONAR_TOO_CLOSE, SONAR_IN_RANGE);
+IRSensor ir_left(IR_LEFT_PIN, IR_MIN_V, IR_MAX_V, IR_MIN_CM, IR_MAX_CM, IR_THRESHOLD, IR_RANGE);
+IRSensor ir_right(IR_RIGHT_PIN, IR_MIN_V, IR_MAX_V, IR_MIN_CM, IR_MAX_CM, IR_THRESHOLD, IR_RANGE);
+IRSensor ir_rear(IR_REAR_PIN, IR_MIN_V, IR_MAX_V, IR_MIN_CM, IR_MAX_CM, SONAR_THRESHOLD, SONAR_RANGE);
 
-Servo neck;
-DistanceSensor sonar(SONAR_FRONT_TRIGGER, SONAR_FRONT_ECHO, SONAR_MAX_DISTANCE, SONAR_TOO_CLOSE, SONAR_IN_RANGE);
+
+SonarSensor sonar(SONAR_SERVO_PIN, SONAR_FRONT_TRIGGER, SONAR_FRONT_ECHO, 5, SONAR_MAX_DISTANCE, SONAR_THRESHOLD, SONAR_RANGE);
 Motors motors(SERVO_LEFT_PIN,SERVO_LEFT_CENTER_MICROS,SERVO_RIGHT_PIN,SERVO_RIGHT_CENTER_MICROS,MOTOR_MAX_POWER_OFFSET);
 
 //NeuralNetwork Brain;
@@ -69,7 +70,7 @@ void setup() {
 
   motors.stop();
   //motors.setSpeed(0,0);
-  init_neck();
+
   delay(1000);
 }
 
@@ -106,7 +107,7 @@ void pingIfReady() {
 
 // Get Turn direction based on ir_left, ir_right
 int getTurnDir() {
-  return (ir_left.cm < ir_right.cm) ? 1 : -1;
+  return (ir_left.currentDistance < ir_right.currentDistance) ? 1 : -1;
 }
 
 
@@ -118,7 +119,7 @@ int turnToAvoid(int lft, int rgt) {
 }
 
 void turnBestDirection(int power, int pct) {
-  int dir = ir_left.cm < ir_right.cm ? 1 : -1;
+  int dir = ir_left.currentDistance < ir_right.currentDistance ? 1 : -1;
 
   if(dir < 0) {
     motors.turn(int(power*pct/100.0), power);
@@ -129,45 +130,45 @@ void turnBestDirection(int power, int pct) {
 }
 
 void spinBestDirection(int power) {
-  int dir = ir_left.cm < ir_right.cm ? 1 : -1;
+  int dir = ir_left.currentDistance < ir_right.currentDistance ? 1 : -1;
 
-  motors.spin(power*(ir_left.cm < ir_right.cm ? 1 : -1));
+  motors.spin(power*(ir_left.currentDistance < ir_right.currentDistance ? 1 : -1));
 
 }
 // No sonars or IR's are too close
 bool allClear() {
-    return(!sonar.isInRange() && !ir_right.isInRange() && !ir_left.isInRange());
+    return(!sonar.inRange() && !ir_right.inRange() && !ir_left.inRange());
 }
 
 inline bool allTooClose() {
-    return(sonar.isTooClose() && ir_left.isTooClose() && ir_right.isTooClose());
+    return(sonar.tooClose() && ir_left.tooClose() && ir_right.tooClose());
 }
 
 inline bool irInRange() {
-  return (ir_left.isInRange() || ir_right.isInRange());
+  return (ir_left.inRange() || ir_right.inRange());
 }
 inline bool irTooClose() {
-  return (ir_left.isTooClose() || ir_right.isTooClose());
+  return (ir_left.tooClose() || ir_right.tooClose());
 }
 
 inline bool sonarTooClose() {
-  return (sonar.isTooClose()); // || ir_front.isTooClose());
+  return (sonar.tooClose()); // || ir_front.isTooClose());
 }
 
 inline bool sonarInRange() {
-  return sonar.isInRange();
+  return sonar.inRange();
 }
 
 inline void doAllClear() {
   motors.forward(100);
 }
 inline void doIrInRange() {
-    turnToAvoid(ir_left.cm,ir_right.cm);
+    turnToAvoid(ir_left.currentDistance,ir_right.currentDistance);
     //turnBestDirection(80,60);
 }
 
 inline void doIrTooClose() {
-    turnToAvoid(ir_left.cm,ir_right.cm);
+    turnToAvoid(ir_left.currentDistance,ir_right.currentDistance);
     //turnBestDirection(80,20);
 }
 
@@ -254,15 +255,10 @@ void move() {
     //buzzer.silent();
 }
 
-void init_neck() {
-  neck.attach(NECK_PIN);
-  neck.write(100);
-  //neck.detach();
-}
 
 void printDistances() {
 #ifdef DEBUG
-  String result = ir_left.cm + String(":") + sonar.cm + String(":") + ir_right.cm;
+  String result = ir_left.currentDistance + String(":") + sonar.currentDistance + String(":") + ir_right.currentDistance;
   Serial.println(result);
 #endif
 }
