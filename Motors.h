@@ -58,12 +58,14 @@ public:
 	void moveToward(float x, float y, int8_t power);
 	void move(int8_t p_left, int8_t p_right);
 
-	inline int getDelayForDistance(float distance, int power);
-	inline int getDelayForAngle(int angle, int power);
-	inline void forward(int8_t power);
-	inline void reverse(int8_t power);
-	inline void turn(int8_t p_left, int8_t p_right);
-	inline void spin(int8_t power);
+	int getDelayForDistance(float distance, int power);
+	int getDelayForAngle(int angle, int power);
+
+	// Basic movement
+	void forward(int8_t power);
+	void reverse(int8_t power);
+	void turn(int8_t p_left, int8_t p_right);
+	void spin(int8_t power);
 
 	// Turn to an angle
 	void turnTo(int angle, int8_t power);
