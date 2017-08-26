@@ -172,3 +172,22 @@ Motors::Motors(uint8_t left_servo_pin, uint16_t left_servo_zero_micros, uint8_t 
 		setSpeed(power, -power);
 		status = MotorStatus::Spinning;
 	}
+
+	int16_t Motors::power_to_micros(int8_t power, int16_t zero) {
+
+			int16_t pow = map(abs(power), 0, 100, 0, servo_range_micros_/2);
+			if (power < 0) {
+				pow = pow * -1;
+			}
+			//Serial.println(zero+pow);
+			return (zero + pow);
+
+		}
+
+		int Motors::randomDir() {
+			if (random(1, 100) < 51) {
+				return -1;
+			} else {
+				return 1;
+			}
+		}

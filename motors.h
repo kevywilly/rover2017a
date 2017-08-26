@@ -56,24 +56,7 @@ class Motors {
 
 
 	Motors(uint8_t left_servo_pin, uint16_t left_servo_zero_micros, uint8_t right_servo_pin, uint16_t right_servo_zero_micros,
-			uint16_t servo_range_micros, float wheel_diameter) {
-
-		status = MotorStatus::Stopped;
-		left_servo_pin_ = left_servo_pin;
-		right_servo_pin_ = right_servo_pin;
-		left_servo_center_micros_ = left_servo_zero_micros;
-		right_servo_center_micros_ = right_servo_zero_micros;
-		servo_range_micros_ = servo_range_micros;
-		last_power_left_ = 0;
-		last_power_right_ = 0;
-
-		delay_360_ = 1000*(1.0/(servo_range_micros_/360.0));
-		wheel_diameter_ = wheel_diameter;
-		wheel_circumference_ = PI * wheel_diameter_;
-
-		randomSeed(analogRead(0));
-	}
-
+			uint16_t servo_range_micros, float wheel_diameter);
 
 	// Attach motors
 	void attach();
@@ -102,8 +85,8 @@ class Motors {
 	void spinToward(int angle, int8_t power);
 
 	// Turn to an angle
-	void Motors::turnTo(int angle, int8_t power);
-	void Motors::turnToward(int angle, int8_t power);
+	void turnTo(int angle, int8_t power);
+	void turnToward(int angle, int8_t power);
 
 	void brake();
 	void forward(int8_t power);
