@@ -8,121 +8,132 @@
 #ifndef MOTORS_H_
 #define MOTORS_H_
 
+#include <Arduino.h>
 #include <Servo.h>
 
-typedef enum {
-    Forward,Spinning,Turning,Braking,Reverse,Stopped
-} MotorState;
+//////////////////// Motor Status ENUM /////////////////////////////
+enum MotorStatus{ Forward,Spinning,Turning,Braking,Reverse,Stopped};
 
-typedef enum {
-  left=-1, right=0
-} Dir;
+
+/*
+ * Position2d
+ *
+ * 	|
+ * x|	y ----
+ * 	|
+ *
+ *  Theta represents body angle from center.
+ *  0 Degrees = forward
+ *
+ */
+class Position2D {
+public:
+	float xPos;
+	float yPos;
+
+	Position2D(float x, float y) {
+		xPos = x;
+		yPos = y;
+	}
+
+	static float calcTheta(float x, float y) {
+		return degrees(asin(y/sqrt(x*x + y*y)));
+	}
+
+	static float calcDistance(float x, float y) {
+		return sqrt(x*x + y*y);
+	}
+
+};
 
 class Motors {
     public:
-      Motors(uint8_t l_pin, uint16_t l_zero, uint8_t r_pin, uint16_t r_zero, uint8_t max_pow) {
-         lft_pin = l_pin;
-         rgt_pin = r_pin;
-         lft_zero = l_zero;
-         rgt_zero = r_zero;
-         max_power = max_pow;
 
-         randomSeed(analogRead(0));
-      }
-
-      static const int8_t DIR_LFT = -1;
-      static const int8_t DIR_RGT = 1;
-
-      MotorState status = MotorState::Stopped;
-
-      uint8_t max_power;
-
-      // Attach motors
-      void attach() {
-          lft.attach(lft_pin, lft_zero-max_power, rgt_zero+max_power);
-          rgt.attach(rgt_pin, rgt_zero-max_power, lft_zero+max_power);
-      }
-
-      void detach() {
-        lft.detach();
-        rgt.detach();
-      }
-
-      void stop() {
-        detach();
-        status = MotorState::Stopped;
-      }
+	// Delay required for 360 degree turn
 
 
-      // Set speed for motors
-      void setSpeed(int8_t p_lft, int8_t p_rgt) {
+	MotorStatus status;
 
-        attach();
-        int16_t l = powerToMicros(-p_lft, lft_zero);
-        int16_t r = powerToMicros(p_rgt, rgt_zero);
-        lft.writeMicroseconds(l);
-        rgt.writeMicroseconds(r);
 
-      }
+	Motors(uint8_t left_servo_pin, uint16_t left_servo_zero_micros, uint8_t right_servo_pin, uint16_t right_servo_zero_micros,
+			uint16_t servo_range_micros, float wheel_diameter) {
 
-      void brake() {
-        setSpeed(0,0);
-        status = MotorState::Braking;
-      }
+		status = MotorStatus::Stopped;
+		left_servo_pin_ = left_servo_pin;
+		right_servo_pin_ = right_servo_pin;
+		left_servo_center_micros_ = left_servo_zero_micros;
+		right_servo_center_micros_ = right_servo_zero_micros;
+		servo_range_micros_ = servo_range_micros;
+		last_power_left_ = 0;
+		last_power_right_ = 0;
 
-      void forward(int8_t power) {
-        setSpeed(power, power);
-        status = MotorState::Forward;
-      }
+		delay_360_ = 1000*(1.0/(servo_range_micros_/360.0));
+		wheel_diameter_ = wheel_diameter;
+		wheel_circumference_ = PI * wheel_diameter_;
 
-      void reverse(int8_t power) {
-        setSpeed(-power, -power);
-        status = MotorState::Reverse;
-      }
-      void turn(int8_t p_left, int8_t p_right) {
-          setSpeed(p_left, p_right);
+		randomSeed(analogRead(0));
+	}
 
-          status = MotorState::Turning;
-      }
 
-      void spin(int8_t power) {
-        setSpeed(power, -power);
-        status = MotorState::Spinning;
-      }
+	// Attach motors
+	void attach();
 
-      void spinRandom(int8_t power) {
-        spin(power*randomDir());
-      }
+	void detach();
 
-    private:
-      uint8_t lft_pin;
-      uint8_t rgt_pin;
-      uint16_t lft_zero;
-      uint16_t rgt_zero;
+	void stop();
 
-      Servo lft;
-      Servo rgt;
+	// Set speed for motors
+	void setSpeed(int8_t p_lft, int8_t p_rgt);
 
-      // Convert power level 0 - 100% to microseconds
-      int16_t powerToMicros(int8_t power, int16_t zero) {
+	int getDelayForDistance(float distance, int power);
+	int getDelayForAngle(int angle, int power);
 
-        int16_t pow = map(abs(power), 0, 100, 0, max_power);
-        if (power < 0) {
-          pow = pow * -1;
-        }
-        //Serial.println(zero+pow);
-        return (zero + pow);
+	// move to relative x,y coordinate
+	void moveToward(float x, float y, int8_t power);
 
-      }
+	// move to relative x,y coordinate
+	void moveTo(float x, float y, int8_t power);
+	void moveToX(float x, int8_t power);
+	void moveTowardX(float x, int8_t power);
 
-      int randomDir() {
-        if (random(1, 100) < 51) {
-          return -1;
-        } else {
-          return 1;
-        }
-      }
+	// Spin to an angle
+	void spinTo(int angle, int8_t power);
 
+	void spinToward(int angle, int8_t power);
+
+	// Turn to an angle
+	void Motors::turnTo(int angle, int8_t power);
+	void Motors::turnToward(int angle, int8_t power);
+
+	void brake();
+	void forward(int8_t power);
+	void reverse(int8_t power);
+	void move(int8_t p_left, int8_t p_right);
+	void turn(int8_t p_left, int8_t p_right);
+	void spin(int8_t power);
+
+private:
+	uint8_t left_servo_pin_;
+	uint8_t right_servo_pin_;
+	uint16_t left_servo_center_micros_;
+	uint16_t right_servo_center_micros_;
+
+	uint8_t last_power_left_;
+	uint8_t last_power_right_;
+
+	uint16_t servo_range_micros_;
+
+	uint16_t delay_360_;
+	float wheel_diameter_;
+	float wheel_circumference_;
+
+	Servo servo_left_;
+	Servo servo_right_;
+
+	// Convert power level 0 - 100% to microseconds
+	int16_t power_to_micros(int8_t power, int16_t zero);
+
+	int randomDir();
 
 };
 

@@ -1,21 +1,49 @@
 
-
-
+#include "Arduino.h"
 #include "IRSensor.h"
 #include "Motors.h"
 #include "SonarSensor.h"
+#include "DistanceSensor.h"
 
 #define DEBUG
 
-#define NECK_PIN 10
+////////////////////////////// Operating Mode //////////////////////////////////
+
+#define CALIBRATION_MODE 0
+#define AUTONOMOUS_MODE 1
+
+int mode = AUTONOMOUS_MODE;
+
+//////////////////////////////// MOTOR SETTINGS ////////////////////////////////////
+
+#define LEFT_MOTOR_PIN 11
+#define RIGHT_MOTOR_PIN 12
+#define LEFT_MOTOR_CENTER_MICROSECONDS 1547
+#define RIGHT_MOTOR_CENTER_MICROSECONDS 1550
+#define MAX_MOTOR_MICROSECONDS_RANGE 400
+#define WHEEL_DIAMETER 9.5
+
+Motors motors(LEFT_MOTOR_PIN, LEFT_MOTOR_CENTER_MICROSECONDS, RIGHT_MOTOR_PIN, RIGHT_MOTOR_CENTER_MICROSECONDS, MAX_MOTOR_MICROSECONDS_RANGE, WHEEL_DIAMETER);
+
+
+////////////////////////////// Sonar Settings //////////////////////////////////
+
 #define SONAR_FRONT_TRIGGER 5
 #define SONAR_FRONT_ECHO 6
 #define SONAR_MAX_DISTANCE 500
+#define SONAR_SERVO_PIN 7
+#define SONAR_THRESHOLD 25
+#define SONAR_RANGE 50
+#define SONAR_PING_INTERVAL 20
+
+SonarSensor sonar((char*) "SONAR", SONAR_SERVO_PIN, SONAR_FRONT_TRIGGER, SONAR_FRONT_ECHO, 5,
+		SONAR_MAX_DISTANCE, SONAR_THRESHOLD, SONAR_RANGE, 65.0, 0.0, 0.0, 45.0);
+
+//////////////////////////////// IR Settings ////////////////////////////////////
 
 #define IR_LEFT_PIN A0
-#define IR_REAR_PIN A1
-#define IR_RIGHT_PIN A2
-
+#define IR_REAR_PIN A2
+#define IR_RIGHT_PIN A1
 #define IR_MIN_V 3
 #define IR_MAX_V 600
 #define IR_MIN_CM 4
@@ -24,241 +52,137 @@
 #define IR_RANGE 25
 #define IR_PING_INTERVAL 15
 
-#define SERVO_LEFT_PIN 11
-#define SERVO_RIGHT_PIN 12
-#define SERVO_LEFT_CENTER_MICROS 1545
-#define SERVO_RIGHT_CENTER_MICROS 1545
-#define MOTOR_MAX_POWER_OFFSET 220
+IRSensor irLeft((char*)"LEFT", IR_LEFT_PIN, IR_MIN_V, IR_MAX_V, IR_MIN_CM, IR_MAX_CM,
+		IR_THRESHOLD, IR_RANGE, 95.0, -35.0, 352.5, 30.0);
+IRSensor irRight((char*)"RIGHT", IR_RIGHT_PIN, IR_MIN_V, IR_MAX_V, IR_MIN_CM, IR_MAX_CM,
+		IR_THRESHOLD, IR_RANGE, 95.0, 35.0, 7.5, 30.0);
+IRSensor irRear((char*)"REAR", IR_REAR_PIN, IR_MIN_V, IR_MAX_V, IR_MIN_CM, IR_MAX_CM,
+		SONAR_THRESHOLD, SONAR_RANGE, 95.0, 0.0, 0.0, 30.0);
 
-#define SONAR_SERVO_PIN 7
-#define SONAR_THRESHOLD 25
-#define SONAR_RANGE 50
-#define SONAR_PING_INTERVAL 20
+//////////////////////////////// DISTANCE SENSORS ////////////////////////////////////
 
-#define CALIBRATION_MODE 0
-#define AUTONOMOUS_MODE 1
+const int kNumDistanceSensors = 3;
+DistanceSensor * distanceSensors[] = { &sonar, &irLeft, &irRight }; //, &irRear };
 
-IRSensor ir_left(IR_LEFT_PIN, IR_MIN_V, IR_MAX_V, IR_MIN_CM, IR_MAX_CM, IR_THRESHOLD, IR_RANGE);
-IRSensor ir_right(IR_RIGHT_PIN, IR_MIN_V, IR_MAX_V, IR_MIN_CM, IR_MAX_CM, IR_THRESHOLD, IR_RANGE);
-IRSensor ir_rear(IR_REAR_PIN, IR_MIN_V, IR_MAX_V, IR_MIN_CM, IR_MAX_CM, SONAR_THRESHOLD, SONAR_RANGE);
-
-
-SonarSensor sonar(SONAR_SERVO_PIN, SONAR_FRONT_TRIGGER, SONAR_FRONT_ECHO, 5, SONAR_MAX_DISTANCE, SONAR_THRESHOLD, SONAR_RANGE);
-Motors motors(SERVO_LEFT_PIN,SERVO_LEFT_CENTER_MICROS,SERVO_RIGHT_PIN,SERVO_RIGHT_CENTER_MICROS,MOTOR_MAX_POWER_OFFSET);
-
-//NeuralNetwork Brain;
-
-int sonar_angles[3] = {135,45,90};
-int mode = AUTONOMOUS_MODE;
-
-
-typedef struct {
-  long left;
-  long front;
-  long right;
-  long rear;
-  MotorState state;
-} CurrentState;
+///////////////////////////////////// SETUP /////////////////////////////////////////
 
 void setup() {
 
 #ifdef DEBUG
-  Serial.begin(115200);
+	Serial.begin(115200);
 #endif
 
-  randomSeed(analogRead(0));
+	randomSeed(analogRead(0));
+	motors.stop();
+	sonar.begin();
 
-  motors.stop();
-  //motors.setSpeed(0,0);
-
-  delay(1000);
+	//delay(1000);
 }
+
+///////////////////////////////////// MAIN LOOP /////////////////////////////////////////
 
 void loop() {
 
-  if(mode == CALIBRATION_MODE){
-    motors.setSpeed(0,0);
-    pingIfReady();
-  } else {
-     pingIfReady();
-     move();
+	if (mode == CALIBRATION_MODE) {
+		motors.setSpeed(0, 0);
+		pingIfReady();
+	} else {
 
+		move();
 
-  }
-   #ifdef DEBUG
-      printDistances();
-    #endif
-
+	}
+#ifdef DEBUG
+	printDistances();
+#endif
 
 }
 
-
+////////////////////////////////// SONAR ECHO CHECK ////////////////////////////////////
 void echoCheck() {
-  sonar.echoCheck();
+	sonar.echoCheck();
 }
 
+////////////////////////////////// PING DISTANCES /////////////////////////////////////
 // Ping Sonars and IR if ping interval has been reached!
 void pingIfReady() {
-  sonar.pingIfReady(echoCheck, SONAR_PING_INTERVAL);
-  ir_rear.pingIfReady(IR_PING_INTERVAL);
-  ir_left.pingIfReady(IR_PING_INTERVAL);
-  ir_right.pingIfReady(IR_PING_INTERVAL);
-}
-
-// Get Turn direction based on ir_left, ir_right
-int getTurnDir() {
-  return (ir_left.currentDistance < ir_right.currentDistance) ? 1 : -1;
+	sonar.pingIfReady(echoCheck, SONAR_PING_INTERVAL);
+	irRear.pingIfReady(IR_PING_INTERVAL);
+	irLeft.pingIfReady(IR_PING_INTERVAL);
+	irRight.pingIfReady(IR_PING_INTERVAL);
 }
 
 
-int turnToAvoid(int lft, int rgt) {
-  int r = 100*float(lft-4.0)/(float(lft-4.0)+float(rgt-4.0));
-
-  motors.turn(100-r, r);
-  return r;
+int angleIsClear(int angle, Obstacle * obstacles) {
+	for(int i=0; i < kNumDistanceSensors; i++) {
+		if(obstacles[i].blocks(angle))
+			return false;
+	}
+	return true;
 }
+int findClearAngle(Obstacle * obstacles) {
 
-void turnBestDirection(int power, int pct) {
-  int dir = ir_left.currentDistance < ir_right.currentDistance ? 1 : -1;
+	if(angleIsClear(0, obstacles))
+		return 0;
 
-  if(dir < 0) {
-    motors.turn(int(power*pct/100.0), power);
-  } else {
-    motors.turn(power, int(power*pct/100.0));
-  }
+	for(int i=1; i < 180; i++) {
+		if(angleIsClear(i,obstacles))
+			return i;
 
+		if(angleIsClear(360-i, obstacles))
+			return (360-i);
+	}
+
+	return 90;
 }
-
-void spinBestDirection(int power) {
-  int dir = ir_left.currentDistance < ir_right.currentDistance ? 1 : -1;
-
-  motors.spin(power*(ir_left.currentDistance < ir_right.currentDistance ? 1 : -1));
-
-}
-// No sonars or IR's are too close
-bool allClear() {
-    return(!sonar.inRange() && !ir_right.inRange() && !ir_left.inRange());
-}
-
-inline bool allTooClose() {
-    return(sonar.tooClose() && ir_left.tooClose() && ir_right.tooClose());
-}
-
-inline bool irInRange() {
-  return (ir_left.inRange() || ir_right.inRange());
-}
-inline bool irTooClose() {
-  return (ir_left.tooClose() || ir_right.tooClose());
-}
-
-inline bool sonarTooClose() {
-  return (sonar.tooClose()); // || ir_front.isTooClose());
-}
-
-inline bool sonarInRange() {
-  return sonar.inRange();
-}
-
-inline void doAllClear() {
-  motors.forward(100);
-}
-inline void doIrInRange() {
-    turnToAvoid(ir_left.currentDistance,ir_right.currentDistance);
-    //turnBestDirection(80,60);
-}
-
-inline void doIrTooClose() {
-    turnToAvoid(ir_left.currentDistance,ir_right.currentDistance);
-    //turnBestDirection(80,20);
-}
-
-inline void doSonarInRange() {
-   motors.forward(80);
-}
-
-inline void doSonarTooClose() {
-  spinBestDirection(80);
-}
-
-inline void doReverse() {
-  motors.reverse(80);
-}
-
-inline void doAllTooClose() {
-  doReverse();
-}
+////////////////////////////////// MAIN DRIVE METHOD /////////////////////////////////////
 void move() {
 
- if(allTooClose()) {
-    doAllTooClose();
-    return;
-  }
+	pingIfReady();
+	Obstacle obstacles[kNumDistanceSensors]; // = new Obstacle[4];
+	for (int i = 0; i < kNumDistanceSensors; i++) {
+		obstacles[i] = distanceSensors[i]->getObstacle();
+    printObstacle(obstacles[i]);
+	}
+
+	int angle = findClearAngle(obstacles);
+
+	if(angle > 180)
+		angle -=360;
+
+	if(angle == 0) {
+		motors.forward(80);
+	} else if(abs(angle) > 45) {
+		motors.spinTo(angle, 60);
+		motors.brake();
+	} else {
+		motors.turnToward(angle,60);
+	}
 
 
-  if(allClear() && (!motors.status || MotorState::Reverse)) {
-    doAllClear();
-    return;
-  }
-
-  switch (motors.status) {
-
-    // Already moving forward
-    case MotorState::Forward:
-      if (sonarTooClose()) {
-          // check sonar too close
-          doSonarTooClose();
-      } else if(irTooClose()) {
-          // check irs too clos
-          doIrTooClose();
-      } else if(irInRange()) {
-          // check ir in range
-          doIrInRange();
-      }
-      else if (sonarInRange()) {
-          // check sonr in range
-          doSonarInRange();
-      }
-      else {
-        motors.forward(100);
-      }
-      break;
-
-    // Already SPINNING
-    case MotorState::Spinning:
-      if(!sonarTooClose()) {
-        // Go back to forward if sonar no longer too close
-        motors.forward(80);
-      }
-      break;
-
-    case MotorState::Turning:
-      if (sonarTooClose()) {
-        // if sonar is too close, then spin!
-        doSonarTooClose();
-      } else if(irInRange()) {
-        // if ir in range and no longer too close then accomodate
-        doIrInRange();
-      }
-      break;
-
-     case MotorState::Reverse:
-        if(!sonarTooClose()) {
-          spinBestDirection(80);
-          delay(500);
-        }
-
-      break;
-    default:
-      doAllClear();
-  }
-
-    //buzzer.silent();
 }
 
-
+////////////////////////////////// SERIAL PRINT METHODS /////////////////////////////////////
 void printDistances() {
-#ifdef DEBUG
-  String result = ir_left.currentDistance + String(":") + sonar.currentDistance + String(":") + ir_right.currentDistance;
-  Serial.println(result);
-#endif
+	if (!Serial)
+		return;
+
+	String result = irLeft.currentDistance + String(":")
+			+ sonar.currentDistance + String(":") + irRight.currentDistance;
+	Serial.println(result);
+
+}
+
+void printObstacle(Obstacle obstacle) {
+	if (!obstacle.exists)
+		return;
+	if (!Serial)
+		return;
+
+	Serial.println("------------------- Obstacle ----------------");
+  Serial.print(obstacle.key);
+	Serial.print(": Radius: "); Serial.print(obstacle.radius);
+	Serial.print(" Theta: "); Serial.print(obstacle.theta);
+  Serial.print(" Range: "); Serial.print(obstacle.thetaMin);
+	Serial.print(" - "); Serial.println(obstacle.thetaMax);
+
 }

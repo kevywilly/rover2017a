@@ -18,19 +18,20 @@ class SonarSensor : public DistanceSensor{
 
 	static const uint8_t kServoCenter = 90;
 
-    SonarSensor(uint8_t _servo_pin, uint8_t trigger, uint8_t echo, uint16_t _minDistance, uint16_t _maxDistance, uint16_t _threshold, uint16_t _range) :
-    	DistanceSensor(_minDistance, _maxDistance, _threshold, _range), sensor(trigger, echo, _maxDistance){
+    SonarSensor(char * key, uint8_t _servo_pin, uint8_t trigger, uint8_t echo, uint16_t _minDistance, uint16_t _maxDistance, uint16_t _threshold, uint16_t _range, float _x, float _y, float _angle, float _arc) :
+    	DistanceSensor(key, _minDistance, _maxDistance, _threshold, _range, _x, _y, _angle, _arc), sensor(trigger, echo, _maxDistance){
       servo_pin = _servo_pin;
       trigger_pin = trigger;
       echo_pin = echo;
-
-      servo.attach(_servo_pin);
-      servo.write(kServoCenter);
 
     }
 
     NewPing sensor;
 
+    void begin() {
+      servo.attach(servo_pin);
+      servo.write(kServoCenter);
+    }
 
     bool pingIfReady(void (*userFunc)(void), int ping_interval) {
       if(millis() >= timer) {

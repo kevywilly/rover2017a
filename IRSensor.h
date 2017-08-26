@@ -17,18 +17,9 @@ class IRSensor : public DistanceSensor{
   public:
 
 
-    IRSensor(uint8_t _sensor_pin, uint16_t _minVoltage, uint16_t _maxVoltage, uint16_t min_cm, uint16_t max_cm, int _threshold, int _range) :
-    	DistanceSensor(min_cm, max_cm, _threshold, _range) {
-    	sensor_pin = _sensor_pin;
-    	min_voltage = _minVoltage;
-    	max_voltage = _maxVoltage;
-    	pinMode(sensor_pin, INPUT);
+    IRSensor(char * key, uint8_t _sensor_pin, uint16_t _minVoltage, uint16_t _maxVoltage, uint16_t min_cm, uint16_t max_cm, int _threshold, int _range, float _x, float _y, float _angle, float _arc);
 
-    }
-
-    void getDistance() {
-       currentDistance = map(analogRead(sensor_pin), min_voltage, max_voltage, maxDistance, minDistance);
-    }
+    void getDistance();
 
   private:
     uint8_t sensor_pin;
