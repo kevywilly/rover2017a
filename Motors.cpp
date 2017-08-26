@@ -1,40 +1,38 @@
 /*
  * Motors.cpp
  *
- *  Created on: Aug 26, 2017
+ *  Created on: Aug 20, 2017
  *      Author: kevywilly
  */
 
+
 #include "Motors.h"
 
-Motors::Motors(uint8_t left_servo_pin, uint16_t left_servo_zero_micros,
-		uint8_t right_servo_pin, uint16_t right_servo_zero_micros,
+Motors::Motors(uint8_t left_servo_pin, uint16_t left_servo_center_micros, uint8_t right_servo_pin, uint16_t right_servo_center_micros,
 		uint16_t servo_range_micros, float wheel_diameter) {
 
 	status = MotorStatus::Stopped;
 	left_servo_pin_ = left_servo_pin;
 	right_servo_pin_ = right_servo_pin;
-	left_servo_center_micros_ = left_servo_zero_micros;
-	right_servo_center_micros_ = right_servo_zero_micros;
+	left_servo_center_micros_ = left_servo_center_micros;
+	right_servo_center_micros_ = right_servo_center_micros;
 	servo_range_micros_ = servo_range_micros;
 	last_power_left_ = 0;
 	last_power_right_ = 0;
-
-	delay_360_ = 1000 * (1.0 / (servo_range_micros_ / 360.0));
 	wheel_diameter_ = wheel_diameter;
-	wheel_circumference_ = PI * wheel_diameter_;
+	wheel_circumference_ = PI * wheel_diameter;
 
+	//delay360 = 1333*(1.0/(max_micros_offset/180.0));
+	delay_360_ = 1000*(1.0/(servo_range_micros_/360.0));
 	randomSeed(analogRead(0));
 }
 
 // Attach motors
 void Motors::attach() {
-	servo_left_.attach(left_servo_pin_,
-			left_servo_center_micros_ - servo_range_micros_ / 2,
-			right_servo_center_micros_ + servo_range_micros_ / 2);
-	servo_right_.attach(right_servo_pin_,
-			right_servo_center_micros_ - servo_range_micros_ / 2,
-			left_servo_center_micros_ + servo_range_micros_ / 2);
+	servo_left_.attach(left_servo_pin_, left_servo_center_micros_ - servo_range_micros_/2,
+			right_servo_center_micros_ + servo_range_micros_/2);
+	servo_right_.attach(right_servo_pin_, right_servo_center_micros_ - servo_range_micros_/2,
+			left_servo_center_micros_ + servo_range_micros_/2);
 }
 
 void Motors::detach() {
@@ -63,8 +61,7 @@ void Motors::setSpeed(int8_t p_lft, int8_t p_rgt) {
 }
 
 int Motors::getDelayForDistance(float distance, int power) {
-	return round(
-			(abs(distance) / wheel_circumference_) * delay_360_ * (100.0 / power));
+	return round((abs(distance) / wheel_circumference_) * delay_360_ * (100.0 / power));
 }
 int Motors::getDelayForAngle(int angle, int power) {
 	return round(map(abs(angle), 0, 360, 0, delay_360_) * 100.0 / power);
@@ -176,13 +173,14 @@ void Motors::spin(int8_t power) {
 	status = MotorStatus::Spinning;
 }
 
+// Convert power level 0 - 100% to microseconds
 int16_t Motors::power_to_micros(int8_t power, int16_t zero) {
 
-	int16_t pow = map(abs(power), 0, 100, 0, servo_range_micros_ / 2);
+	int16_t pow = map(abs(power), 0, 100, 0, servo_range_micros_/2);
 	if (power < 0) {
 		pow = pow * -1;
 	}
-	//Serial.println(zero+pow);
+
 	return (zero + pow);
 
 }
@@ -194,3 +192,5 @@ int Motors::randomDir() {
 		return 1;
 	}
 }
+
+
