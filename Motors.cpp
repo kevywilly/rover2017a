@@ -101,7 +101,7 @@ void Motors::spinToward(int angle, int8_t power) {
 	if (angle != 0)
 		(angle < 0) ? turn(-power, power) : turn(power, -power);
 
-	delay(getDelayForAngle(angle, power));
+	delay(getDelayForAngle(angle, power)/2);
 }
 
 // Turn to an angle

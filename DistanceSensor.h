@@ -9,6 +9,7 @@
 #define DISTANCESENSOR_H_
 
 #include "Arduino.h"
+#include "Tuples.h"
 
 /*
  * Angle - Simple class for managing angles
@@ -16,36 +17,61 @@
 class Angle{
 public:
 
-	/*
-	 * Convert degrees to 360 (0-359) representation
-	 */
-	static float DegreesTo360(float angle) {
-			if(angle < 0)
-				return angle+360.0;
+	//////////////////////////////////////////////////////////////////////////////////////
+	// Convert degrees to 360 (0-359) representation
+	//////////////////////////////////////////////////////////////////////////////////////
+	static int To360(int angle) {
+		if(angle < 0)
+			return angle+360.0;
 
-			if(angle >=360)
-				return angle - 360.0;
+		if(angle >=360)
+			return angle - 360.0;
 
-			return angle;
-		}
+		return angle;
+	}
 
-	/*
-	 * Is angle between to angles represented as 0-359 moving clockwise.
-	 */
+	static tuple3<int> To360(tuple3<int> angles) {
+			return {To360(angles._1), To360(angles._2), To360(angles._3)};
+	}
+
+	static int ToPlusMinus(int angle) {
+			return (angle > 180) ? angle - 360 : angle;
+	}
+
+	static tuple3<int> ToPlusMinus(tuple3<int> angles) {
+		return {ToPlusMinus(angles._1), ToPlusMinus(angles._2), ToPlusMinus(angles._3)};
+	}
+
+	static int MinAngleFromZero(int a, int b) {
+		if(abs(ToPlusMinus(a)) < abs(ToPlusMinus(b)))
+			return a;
+
+		return b;
+	}
+
+	//////////////////////////////////////////////////////////////////////////////////////
+	// Is angle between to angles represented as 0-359 moving clockwise.
+	//////////////////////////////////////////////////////////////////////////////////////
 	static bool IsBetween(int left, int right, int angle) {
-		int i = left;
-		while(i != right) {
-			if(i == angle)
+
+		int lft = To360(left);
+		int target = To360(angle);
+		int rgt = To360(right);
+
+		int i = lft;
+		while(i != rgt) {
+			if(i == target)
 				return true;
-			i = DegreesTo360(i+1);
+			i = To360(i+1);
 		}
 		return false;
 	}
+
 };
 
-/*
- * Spatial representation of an obstacle from center of viewer - distance, angle, arc
- */
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// Obstacle: Spatial representation of an obstacle from center of viewer - distance, angle, arc  //
+///////////////////////////////////////////////////////////////////////////////////////////////////
 class Obstacle {
 public:
 	float radius;
@@ -53,8 +79,9 @@ public:
 	float thetaMin;
 	float thetaMax;
 	bool exists;
-  char * key;
+	char * key;
 
+	// Generic constructor
 	Obstacle() {
 		radius = 0;
 		theta = 0;
@@ -63,16 +90,19 @@ public:
 		exists = false;
 		key = (char*) "none";
 	}
+
+	// Constructor
 	Obstacle(char *_key, float _radius, float _theta, float _arc) {
 		exists = true;
 		radius = _radius;
-		theta = Angle::DegreesTo360(_theta);
-		thetaMin = Angle::DegreesTo360(theta - _arc);
-		thetaMax = Angle::DegreesTo360(theta + _arc);
+		theta = Angle::To360(_theta);
+		thetaMin = Angle::To360(theta - _arc);
+		thetaMax = Angle::To360(theta + _arc);
 		key = _key;
 	}
 
-	bool blocks(int angle) {
+	// Bool: Angle is blocked by an obstacle
+	bool angleIsBlocked(int angle) {
 		if(!exists)
 			return false;
 
@@ -80,9 +110,10 @@ public:
 	}
 };
 
-/*
- * Distance sensor base class
- */
+/////////////////////////////////////////////////////////////////////////////////////////
+// Genric Distance Sensor - Abstract Class  										   //
+/////////////////////////////////////////////////////////////////////////////////////////
+
 class DistanceSensor {
 public:
 
@@ -95,14 +126,14 @@ public:
 	float yaw;
 	float x;
 	float y;
-  char * key;
+	char * key;
 
 	unsigned long timer = 0;
 
 	DistanceSensor(char * _key, uint16_t _minDistance, uint16_t _maxDistance,
 			uint16_t _threshold, uint16_t _range, float _x, float _y,
 			float _yaw, float _arc) {
-    key = _key;
+		key = _key;
 		minDistance = _minDistance;
 		maxDistance = _maxDistance;
 		threshold = _threshold;
@@ -137,8 +168,8 @@ public:
 	}
 
 	Obstacle getObstacle() {
-    if(!tooClose()) 
-      return Obstacle();
+		if(!tooClose())
+			return Obstacle();
 		float y2 = sin(radians(yaw))/currentDistance;
 		float x2 = cos(radians(yaw))/currentDistance;
 		float xPos = x+x2;
